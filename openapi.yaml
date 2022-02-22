@@ -1,0 +1,161 @@
+openapi: 3.0.0
+info:
+  title: Sample API
+  description: 'Optional multiline or single-line description in [CommonMark](http://commonmark.org/help/) or HTML.'
+  version: 0.1.9
+servers:
+  - url: 'http://api.example.com/v1'
+    description: 'Optional server description, e.g. Main (production) server'
+  - url: 'http://staging-api.example.com'
+    description: 'Optional server description, e.g. Internal staging server for testing'
+components:
+  schemas:
+    ProviderType:
+      type: string
+      enum:
+        - salesforce
+        - hubspot
+        - custom
+    DataType:
+      type: string
+      enum:
+        - string
+        - list
+    TokenId:
+      type: string
+      maxLength: 250
+    Token:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/TokenId'
+        name:
+          description: The user facing name for this token
+          type: string
+        dataType:
+          $ref: '#/components/schemas/DataType'
+        providerType:
+          $ref: '#/components/schemas/ProviderType'
+        hierarchyInfo:
+          description: Information about where this belongs in the token hierarchy if there is one.
+          type: object
+          properties:
+            parentId:
+              $ref: '#/components/schemas/TokenId'
+        providerData:
+          description: |
+            Provider data which is associated with this token.
+            This field should be stored alongside the token and supplied to the token resolver without modification.
+            Clients should not rely on the structure of this object.
+          type: object
+          additionalProperties: true
+paths:
+  /tokens:
+    get:
+      parameters:
+        - in: query
+          name: dataType
+          schema:
+            $ref: '#/components/schemas/DataType'
+        - in: query
+          name: providerType
+          schema:
+            $ref: '#/components/schemas/ProviderType'
+        - in: query
+          description: Used to query only for tokens which are a child of a particular parent token.
+          name: parentId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Token'
+      description: API resource to get all available tokens for the current user
+    post:
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  description: The user facing name for this token
+                  type: string
+                dataType:
+                  $ref: '#/components/schemas/DataType'
+                providerType:
+                  description: The providerType for this token. Currently only custom tokens can be created through the API.
+                  type: string
+                  enum:
+                    - custom
+                parentId:
+                  $ref: '#/components/schemas/TokenId'
+      responses:
+        '201':
+          description: API resource to get all available tokens for the current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+      description: API to create a token
+  '/tokens/{tokenId}':
+    delete:
+      parameters:
+        - in: path
+          name: tokenId
+          required: true
+          schema:
+            $ref: '#/components/schemas/TokenId'
+      responses:
+        '204':
+          description: Token has been deleted
+        '400':
+          description: The Token exists but it can't be deleted. It probably isn't a custom token.
+        '404':
+          description: The TokenId couldn't be found
+      description: |
+        API to delete a token. Currently only custom tokens can be deleted. If a token has any children, they will also be deleted.
+  /resolve-tokens:
+    post:
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Token'
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resolvedTokens:
+                    type: object
+                    description: A map of token IDs to resolved values. Repeating tokens will have an array as their value.
+                    example:
+                      'tokens:zoho:company:name': Test corp
+                      'tokens:zoho::contact':
+                        - 'tokens:zoho:contact:firstname': Test
+                          'tokens:zoho:contact:secondname': Person
+                    additionalProperties:
+                      oneOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: object
+                            additionalProperties:
+                              type: string
+      operationId: Resolve Tokens
+      description: This endpoint is used to resolve tokens into potential values
